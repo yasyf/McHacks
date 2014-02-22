@@ -1,0 +1,23 @@
+<head>
+  <title>McHacks</title>
+</head>
+
+<body>
+  {{> top}}
+  {{> inputs}}
+</body>
+
+<template name="top">
+	<div>
+	  <input type="text" name="in" id="in" />
+	  <input type="button" value="Add" id="addbtn" />
+	</div>
+</template>
+
+<template name="inputs">
+   	{{#each items}}
+	 <div> {{i}}</div>
+	{{/each}}
+</template>
+
+
