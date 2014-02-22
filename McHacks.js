@@ -37,14 +37,26 @@ if (Meteor.isClient) {
   }
 
   Deps.autorun(function () {
-    pos = Positions.findOne({session: Session.get("session")});
+    var pos = Positions.findOne({session: Session.get("session")});
     if(gridster && Session.get('session') && pos.updater != Session.get('uid')){
-      console.log("REMOVE ALL");
-      gridster.remove_all_widgets();
-      pos.diff.forEach(function(e){
-        console.log("ADD");
-        gridster.add_widget('<li class="item number">'+e.content+'</li>',1,1,e.col,e.row);
-      });
+      var count = 0;
+      var len = gridster.$widgets.length;
+      function add_all() {
+        pos.diff.forEach(function(e){
+          gridster.add_widget('<li class="item number">'+e.content+'</li>',1,1,e.col,e.row);
+        });
+      }
+      if(len == 0){
+        add_all();
+      }
+      else{
+        gridster.remove_all_widgets(function(){
+          count += 1;
+          if(count == len){
+            add_all();
+          }
+        });
+      }
     }
   });
 
