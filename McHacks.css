@@ -3,11 +3,18 @@
 }
 
 .gridster{
-	width: 100px;
-	height: 100px;
+	width: 960px;
+	height: 500px;
 	margin: 0 auto;
+	border: 1px dashed black;
+}
+
+.inner{
+	padding: 0px;
 }
 
 li{
 	list-style-type: none;
+	border: 1px solid black;
+	text-align: center;
 }

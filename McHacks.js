@@ -3,14 +3,23 @@ Inputs = new Meteor.Collection("inputs");
 Positions = new Meteor.Collection("positions");
 if (Meteor.isClient) {
   var gridster;
-  Meteor.startup(function () {
+
+  function store_hash() {
     if(location.hash.length < 2){
       location.hash = Math.random().toString(36).substring(2,7);
     }
     Session.set("session",location.hash.substring(1));
+  }
+
+  Meteor.startup(function () {
+    store_hash();
     if(!Session.get('uid')){
       Session.set('uid',Math.random().toString(36).substring(2,10));
     }
+  });
+
+  $(window).on('hashchange', function(){
+      store_hash();
   });
 
   Template.inputs.rendered = function() {
@@ -22,6 +31,8 @@ if (Meteor.isClient) {
             stop: save_pos
           },
           avoid_overlapped_widgets: true,
+          min_cols: 16,
+          min_rows: 16,
           serialize_params: function($w, wgd){ 
               return { 
                      id: $($w).attr('id'), 
@@ -38,6 +49,9 @@ if (Meteor.isClient) {
 
   Deps.autorun(function () {
     var pos = Positions.findOne({session: Session.get("session")});
+    if(gridster && !pos){
+      location.reload(true);
+    }
     if(gridster && Session.get('session') && pos.updater != Session.get('uid')){
       var count = 0;
       var len = gridster.$widgets.length;
