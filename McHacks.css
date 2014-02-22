@@ -1,1 +1,13 @@
-/* CSS declarations go here */
+.item{
+	font-size: 40px;
+}
+
+.gridster{
+	width: 100px;
+	height: 100px;
+	margin: 0 auto;
+}
+
+li{
+	list-style-type: none;
+}

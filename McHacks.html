@@ -1,5 +1,7 @@
 <head>
-  <title>McHacks</title>
+  	<title>McHacks</title>
+    <link href="client/css/jquery.gridster.css" rel="stylesheet" />
+    <script src="client/js/jquery.gridster.min.js" />
 </head>
 
 <body>
@@ -9,15 +11,15 @@
 
 <template name="top">
 	<div>
-	  <input type="text" name="in" id="in" />
-	  <input type="button" value="Add" id="addbtn" />
+	  	<form id='addfrm'>
+		  <input type="number" name="i" id="i" min="1" max="9" />
+		  <input type="submit" value="Add" id="addbtn" />
+		</form>
 	</div>
 </template>
 
 <template name="inputs">
-   	{{#each items}}
-	 <div> {{i}}</div>
-	{{/each}}
+	<div class="gridster"><ul></ul></div>
 </template>
 
 
