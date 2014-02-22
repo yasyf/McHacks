@@ -8,6 +8,9 @@ if (Meteor.isClient) {
       location.hash = Math.random().toString(36).substring(2,7);
     }
     Session.set("session",location.hash.substring(1));
+    if(!Session.get('uid')){
+      Session.set('uid',Math.random().toString(36).substring(2,10));
+    }
   });
 
   Template.inputs.rendered = function() {
@@ -18,6 +21,7 @@ if (Meteor.isClient) {
           draggable: {
             stop: save_pos
           },
+          avoid_overlapped_widgets: true,
           serialize_params: function($w, wgd){ 
               return { 
                      id: $($w).attr('id'), 
@@ -34,9 +38,11 @@ if (Meteor.isClient) {
 
   Deps.autorun(function () {
     pos = Positions.findOne({session: Session.get("session")});
-    if(gridster && Session.get('session')){
+    if(gridster && Session.get('session') && pos.updater != Session.get('uid')){
+      console.log("REMOVE ALL");
       gridster.remove_all_widgets();
       pos.diff.forEach(function(e){
+        console.log("ADD");
         gridster.add_widget('<li class="item number">'+e.content+'</li>',1,1,e.col,e.row);
       });
     }
@@ -46,10 +52,10 @@ if (Meteor.isClient) {
     current_pos =  gridster.serialize();
     id = Positions.findOne({session: Session.get("session")});
     if(id){
-      Positions.update({_id: id._id},{$set: {diff: current_pos}});
+      Positions.update({_id: id._id},{$set: {diff: current_pos, updater: Session.get('uid')}});
     }
     else{
-      Positions.insert({diff: current_pos, session: Session.get("session")});
+      Positions.insert({diff: current_pos, session: Session.get("session"), updater: Session.get('uid')});
     }
   }
 
