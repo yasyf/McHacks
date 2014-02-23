@@ -49,6 +49,8 @@ if (Meteor.isClient) {
           draggable: {
             stop: save_pos
           },
+          extra_rows: 0,
+          extra_cols: 0,
           avoid_overlapped_widgets: true,
           serialize_params: function($w, wgd){ 
               return { 
@@ -76,11 +78,11 @@ if (Meteor.isClient) {
           prev = get_id(e.id);
           if(prev.length){
             gridster.remove_widget(prev, function() {
-              gridster.add_widget('<li class="item number" id="'+i+"_"+Session.get('n')+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
+              gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
             });
           }
           else{
-            gridster.add_widget('<li class="item number" id="'+i+"_"+Session.get('n')+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
+            gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
           }
         }
       });
@@ -116,7 +118,7 @@ if (Meteor.isClient) {
 
   function add_widget_from_input(str,add) {
     s = new StringParser();
-    t = s.parseTerm(str).flatten(Session.get('n'));
+    t = s.parseEquation(str).flatten(Session.get('n'));
     var id_c = Counts.findOne({session: Session.get("session"), n: Session.get('n')});
     if(!id_c){
       id_c = Counts.insert({session: Session.get("session"), count: 0, n: Session.get('n')});
@@ -124,21 +126,34 @@ if (Meteor.isClient) {
     }
     Counts.update({_id: id_c._id}, {$inc: {count: 1}});
     count = id_c.count + 1;
-    t.forEach(function(e,i){
-      if(Inputs.findOne({i: e.toDisplayString(), session: Session.get("session"), id: i, l: e.getLength(), n: Session.get("n")})){
-        Inputs.insert({i: e.toDisplayString(), session: Session.get("session"), id: i, l: e.getLength(), n: Session.get("n")});
+    if(add){
+      function run_each() {
+        t.forEach(function(e,i){
+          if(!Inputs.findOne({i: e.toDisplayString(), session: Session.get("session"), id: i+"_"+Session.get('n'), l: e.getLength(), n: Session.get("n")})){
+            Inputs.insert({i: e.toDisplayString(), session: Session.get("session"), id: i+"_"+Session.get('n'), l: e.getLength(), n: Session.get("n")});
+          }
+          if(add){
+            gridster.add_widget('<li class="item number" id="'+i+"_"+Session.get('n')+'">'+e.toDisplayString().replace("*","&middot;")+'</li>',e.getDisplayLength(),1,i+1,count);
+          }
+        });
       }
-      if(add){
-        gridster.remove_all_widgets();
-        gridster.add_widget('<li class="item number" id="'+i+"_"+Session.get('n')+'">'+e.toDisplayString().replace("*","&middot;")+'</li>',e.getDisplayLength(),1,i+1,count);
+      c = 0;
+      gridster.remove_all_widgets(function() {
+        c += 1;
+        if(c == gridster.$widgets.length){
+          run_each();
+        } 
+      });
+      if(c == 0){
+        run_each();
       }
-    });
+    }
   }
 
   Deps.autorun(function() {
     n = Session.get('n');
     if(!Inputs.findOne({session: Session.get('session'), n: Session.get('n')})){
-      Strings.findOne({session: Session.get('Session')}).fetch().forEach(function(e) {
+      Strings.find({session: Session.get('Session')}).fetch().forEach(function(e) {
         add_widget_from_input(e.i, false);
       });
     }
@@ -216,6 +231,13 @@ var Operation = {
 
 function StringParser(){
   this.parseEquation = function(string){
+      if(string.match("=")){
+        var index = string.indexOf('=');
+        var leftTerm = parseTerm(string,0,index);
+        var rightTerm = parseTerm(string,index+1, string.length);
+        return new Equation(leftTerm, rightTerm);
+      }
+      return this.parseTerm(string);
       
   },
 
@@ -362,6 +384,7 @@ function Term(leftterm, rightterm, operation){
   var left = leftterm;
   var right = rightterm;
   var operation = operation;
+  this.depth;
 
   this.decideChildrenParen = function(){
     if(operation == Operation.MULTIPLY){
@@ -399,7 +422,7 @@ function Term(leftterm, rightterm, operation){
   this.decideChildrenParen();
 
   this.getDisplayLength = function(){
-    return 1;
+    return this.toDisplayString().length;
   }
 
   this.getLength = function(){
@@ -408,16 +431,24 @@ function Term(leftterm, rightterm, operation){
 
   this.length = this.getLength();
 
-  this.flatten = function(array){
+  this.flatten = function(array,depth){
+      this.depth = depth;
+      if(depth == undefined){
+        depth = 1000;
+      }
+      if(depth == 1){
+        array.push(this);
+        return array;
+      }
       if(array == undefined){
         array = [];
       }
       if(this.needsParen){
         array.push(new SpecialCharacter("(")) 
       }   
-      left.flatten(array);
+      left.flatten(array,depth-1);
       array.push(this);
-      right.flatten(array);
+      right.flatten(array,depth-1);
       if(this.needsParen){
         array.push(new SpecialCharacter(")")) 
       }
@@ -503,7 +534,12 @@ function Term(leftterm, rightterm, operation){
   }
 
   this.toDisplayString = function(){
-    return Operation.toString(operation);
+    if(this.depth == 1){
+      return this.toString();
+    }
+    else{
+      return Operation.toString(operation);
+    }
   }
 
   this.print = function(){
@@ -527,12 +563,22 @@ function SpecialCharacter(character){
 function Equation(leftterm, rightterm){
   var left = leftterm;
   var right = rightterm;
-  
-  this.flatten = function(array){
+  this.depth;
+
+  this.flatten = function(array,depth){
     array = [];
-    left.flatten(array);
+    if(depth == undefined){
+      depth = 1000;
+    }
+    this.depth = depth;
+    if(depth == 1){
+      array.push(this);
+      return array;
+    }
+    
+    left.flatten(array,depth-1);
     array.push(new SpecialCharacter("="));
-    right.flatten(array);
+    right.flatten(array,depth-1);
     return array;
   }
 
@@ -566,7 +612,7 @@ function Equation(leftterm, rightterm){
   }
 
   this.toString = function(){ 
-    return left.toString()+ "=" +right.toString();
+    return left.toString() + "=" +right.toString();
   }
 
   this.getLength = function(){
@@ -588,9 +634,12 @@ function Equation(leftterm, rightterm){
   }
 
   this.getDisplayLength = function(){
-    return 1;
+    return this.toDisplayString().length;
   }
 
+  this.toDisplayString = function(){
+    return this.toString();
+  }
   this.isolateControler= function(a,b) {
     if (a==1){
       if (b==1){
