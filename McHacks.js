@@ -22,6 +22,18 @@ if (Meteor.isClient) {
       store_hash();
   });
 
+  function rid() {
+    return Math.random().toString(36).substring(2,6);
+  }
+
+  function get_xy(col,row) {
+    return $(".gridster ul [data-col='"+col+"'][data-row='"+row+"']");
+  }
+
+  function get_id(id) {
+    return $(".gridster #"+id);
+  }
+
   Template.inputs.rendered = function() {
     if(!gridster){
       gridster = $(".gridster ul").gridster({
@@ -53,24 +65,21 @@ if (Meteor.isClient) {
       location.reload(true);
     }
     if(gridster && Session.get('session') && pos.updater != Session.get('uid')){
-      var count = 0;
-      var len = gridster.$widgets.length;
-      function add_all() {
-        pos.diff.forEach(function(e){
-          gridster.add_widget('<li class="item number">'+e.content+'</li>',1,1,e.col,e.row);
-        });
-      }
-      if(len == 0){
-        add_all();
-      }
-      else{
-        gridster.remove_all_widgets(function(){
-          count += 1;
-          if(count == len){
-            add_all();
+      pos.diff.forEach(function(e){
+        curr = get_xy(e.col,e.row);
+        if(e.id != curr.attr('id')){
+          prev = get_id(e.id);
+          console.log(prev);
+          if(prev.length){
+            gridster.remove_widget(prev, function() {
+              gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',1,1,e.col,e.row);
+            });
           }
-        });
-      }
+          else{
+            gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',1,1,e.col,e.row);
+          }
+        }
+      });
     }
   });
 
@@ -90,7 +99,7 @@ if (Meteor.isClient) {
       e.preventDefault();
       val = $('#i').val();
       Inputs.insert({i: val, session: Session.get("session")});
-      gridster.add_widget('<li class="item number">'+val+'</li>');
+      gridster.add_widget('<li class="item number" id="'+rid()+'">'+val+'</li>');
       save_pos();
       $('#i').val('');
     }
@@ -99,6 +108,8 @@ if (Meteor.isClient) {
 
 if (Meteor.isServer) {
   Meteor.startup(function () {
-    //Inputs.remove({});
+    // Inputs.remove({});
+    // Sessions.remove({});
+    // Positions.remove({});
   });
 }
