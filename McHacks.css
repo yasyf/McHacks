@@ -10,7 +10,6 @@ body{
 
 .item{
 	font-size: 40px;
-	padding: 0px 5px;
 	min-width: 32px !important;
 	width: auto !important;
 	height: 45 !important;
@@ -25,7 +24,7 @@ body{
 
 .inner{
 	padding: 0px;
-	margin: 0px !important;
+	margin: 10px !important;
 }
 
 li{
@@ -43,10 +42,11 @@ li{
 }
 
 .variable{
-
+	width: 45 !important;
 }
 
 .constant{
+	width: 45 !important;
 
 }
 

@@ -45,8 +45,8 @@ if (Meteor.isClient) {
     if(!gridster){
       gridster = $(".gridster ul").gridster({
           widget_selector: '.draggable',
-          widget_margins: [5, 30],
           widget_base_dimensions: [45, 45],
+          widget_margins: [5, 30],
           draggable: {
             stop: save_pos,
             items: '.draggable'
@@ -129,7 +129,6 @@ if (Meteor.isClient) {
   function add_widget_from_input(str,add) {
     s = new StringParser();
     var t = s.parseEquation(str).flatten(Session.get('n'));
-    console.log(t);
     var id_c = Counts.findOne({session: Session.get("session"), n: Session.get('n')});
     if(!id_c){
       id_c = Counts.insert({session: Session.get("session"), count: 0, n: Session.get('n')});
@@ -141,17 +140,18 @@ if (Meteor.isClient) {
       function run_each() {
         var lastL = 0;
         t.forEach(function(e,i){
-          if(!Inputs.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), row: count, col: i+1+lastL, l: e.getDisplayLength(), n: Session.get("n"), id: {$regex: i+"_"+Session.get('n')+"_"+count}})){
+          if(!Inputs.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), row: count, col: i+lastL, l: e.getDisplayLength(), n: Session.get("n"), id: {$regex: i+"_"+Session.get('n')+"_"+count}})){
             if(e.draggable){
               draggable = 'draggable';
             }else{
               draggable = '';
             }
-            Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: i+1+lastL, session: Session.get("session"), id: rid()+"_"+i+"_"+Session.get('n')+"_"+count, l: e.getDisplayLength(), n: Session.get("n")});
-            lastL = e.getDisplayLength() - 1;
+            Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: i+lastL, session: Session.get("session"), id: rid()+"_"+i+"_"+Session.get('n')+"_"+count, l: e.getDisplayLength(), n: Session.get("n")});
+            lastL = e.getDisplayLength() + lastL - 1;
           }
         });
         Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch().forEach(function(e) {
+          console.log(e);
           gridster.add_widget('<li class="item '+e.type+' '+e.draggable+'" id="'+e.id+'">'+e.i+'</li>',e.l,1,e.col,e.row);
         });
       }
