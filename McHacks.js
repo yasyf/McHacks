@@ -140,14 +140,18 @@ if (Meteor.isClient) {
       function run_each() {
         var lastL = 0;
         t.forEach(function(e,i){
-          if(!Inputs.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), row: count, col: i+lastL, l: e.getDisplayLength(), n: Session.get("n"), id: {$regex: i+"_"+Session.get('n')+"_"+count}})){
+          col_n = i+lastL;
+          if(col_n === 0){
+            col_n = 1;
+          }
+          if(!Inputs.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), row: count, col: col_n, l: e.getDisplayLength(), n: Session.get("n"), id: {$regex: i+"_"+Session.get('n')+"_"+count}})){
             if(e.draggable){
               draggable = 'draggable';
             }else{
               draggable = '';
             }
-            Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: i+lastL, session: Session.get("session"), id: rid()+"_"+i+"_"+Session.get('n')+"_"+count, l: e.getDisplayLength(), n: Session.get("n")});
-            lastL = e.getDisplayLength() + lastL - 1;
+            Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: col_n, session: Session.get("session"), id: rid()+"_"+i+"_"+Session.get('n')+"_"+count, l: e.getDisplayLength(), n: Session.get("n")});
+            lastL = e.getDisplayLength() + col_n - i - 1;
           }
         });
         Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch().forEach(function(e) {
@@ -467,7 +471,12 @@ function Term(leftterm, rightterm, operation){
   }
 
   this.getType = function(){
-    return "mixed";
+    if(this.depth == 1){
+      return "mixed";
+    }
+    else{
+      return "operator";
+    }
   }
 
   this.decideChildrenParen = function(){
