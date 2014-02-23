@@ -188,7 +188,7 @@ if (Meteor.isClient) {
       if(col_n === 0){
         col_n = 1;
       }
-      if(!Counts.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), l: e.getDisplayLength(), n: Session.get("n"), row: count, col: col_n, id: {$regex: i+"_"+Session.get('n')+"_"+count+"_"}})){
+      if(!Counts.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), l: e.getDisplayLength(), n: Session.get("n"), row: count, col: col_n})){
         if(e.draggable){
           draggable = 'draggable';
         }else{
