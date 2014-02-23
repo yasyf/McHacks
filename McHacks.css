@@ -1,9 +1,19 @@
+body{
+	-webkit-user-select: none;  /* Chrome all / Safari all */
+    -moz-user-select: none;     /* Firefox all */
+    -ms-user-select: none;      /* IE 10+ */
+
+  /* No support for these yet, use at own risk */
+    -o-user-select: none;
+    user-select: none;  
+}
+
 .item{
 	font-size: 40px;
 	padding: 0px 5px;
 	min-width: 32px !important;
 	width: auto !important;
-	height: auto !important;
+	height: 45 !important;
 }
 
 .gridster{

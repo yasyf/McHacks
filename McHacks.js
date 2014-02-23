@@ -44,11 +44,15 @@ if (Meteor.isClient) {
   Template.inputs.rendered = function() {
     if(!gridster){
       gridster = $(".gridster ul").gridster({
-          widget_selector: $('.draggable'),
-          widget_margins: [7, 30],
+          widget_selector: '.draggable',
+          widget_margins: [5, 30],
           widget_base_dimensions: [45, 45],
           draggable: {
-            stop: save_pos
+            stop: save_pos,
+            items: '.draggable'
+          },
+          collision: {
+            colliders: $('.draggable')
           },
           extra_rows: 16,
           extra_cols: 16,
@@ -135,24 +139,23 @@ if (Meteor.isClient) {
     var count = id_c.count + 1;
     if(add){
       function run_each() {
-        console.log('run_each'+ count);
+        var lastL = 0;
         t.forEach(function(e,i){
-          if(!Inputs.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), row: count, col: i+1, l: e.getDisplayLength(), n: Session.get("n"), id: {$regex: i+"_"+Session.get('n')+"_"+count}})){
+          if(!Inputs.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), row: count, col: i+1+lastL, l: e.getDisplayLength(), n: Session.get("n"), id: {$regex: i+"_"+Session.get('n')+"_"+count}})){
             if(e.draggable){
               draggable = 'draggable';
             }else{
               draggable = '';
             }
-            Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: i+1, session: Session.get("session"), id: rid()+"_"+i+"_"+Session.get('n')+"_"+count, l: e.getDisplayLength(), n: Session.get("n")});
+            Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: i+1+lastL, session: Session.get("session"), id: rid()+"_"+i+"_"+Session.get('n')+"_"+count, l: e.getDisplayLength(), n: Session.get("n")});
+            lastL = e.getDisplayLength() - 1;
           }
         });
         Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch().forEach(function(e) {
-          console.log(e);
           gridster.add_widget('<li class="item '+e.type+' '+e.draggable+'" id="'+e.id+'">'+e.i+'</li>',e.l,1,e.col,e.row);
         });
       }
       if(gridster.$widgets.length == 0){
-        console.log('run_each_call from 0');
         run_each();
         return;
       } 
@@ -162,7 +165,6 @@ if (Meteor.isClient) {
         c += 1;
         console.log(c);
         if(c == len){ 
-          console.log('run_each_call');
           run_each();
         } 
       });
@@ -421,8 +423,48 @@ function Term(leftterm, rightterm, operation){
   var left = leftterm;
   var right = rightterm;
   var operation = operation;
+  this.parent;
+  if(left != undefined){
+    left.parent = this;
+  }
+  if(right != undefined){
+    right.parent = this;
+  }
   this.depth;
   this.draggable = true;
+
+  this.setRight = function(term){
+     right = term;
+     term.parent = this;
+  }
+
+  this.setLeft = function(term){
+     left = term;
+     term.parent = this;
+  }
+
+  //replaces termA with termB everywhere
+  this.replace = function(termA, termB){
+    var parent; //the parent
+    var direction=-1; //left = -1, right = 1;
+    var newParent;
+    if(this.equals(termA)){
+      parent = this.parent;
+      if(parent.getLeft().equals(termA)){
+        parent.setLeft(termB);
+      }
+      if(parent.getRight().equals(termA)){
+        parent.setRight(termB);
+      }
+    }
+    else{
+      if(this.isOperation()){
+        left.replace(termA,termB);
+        right.replace(termA,termB);
+      }
+    }
+
+  }
 
   this.getType = function(){
     return "mixed";
@@ -444,18 +486,14 @@ function Term(leftterm, rightterm, operation){
       right.needsParen = true;
     }
     if(operation == Operation.ADD){
-      if(left.getOperation() == Operation.MULTIPLY || left.getOperation == Operation.DIVIDE){
-        left.needsParen = true;
-      }
-      if(right.getOperation() == Operation.MULTIPLY || right.getOperation == Operation.DIVIDE){
-        right.needsParen = true;
-      }
+      left.needsParen = false;
+      right.needsParen = false;
     }
     if(operation == Operation.SUBTRACT){
       if(left.getOperation() == Operation.MULTIPLY || left.getOperation == Operation.DIVIDE){
         left.needsParen = true;
       }
-      if(operation == Operation.DIVIDE){
+      if(right.getOperation == Operation.DIVIDE){
         right.needsParen = true;
       }
     }
@@ -483,14 +521,16 @@ function Term(leftterm, rightterm, operation){
       }
       if(depth == 1){
         array.push(this);
-        this.drraggable = true;
+        this.draggable = true;
         return array;
       }
       if(this.needsParen){
         array.push(new SpecialCharacter("(")) 
       }   
       left.flatten(depth-1,array);
-      array.push(this);
+      if(this.needsOp()){
+        array.push(this);
+      }
       this.draggable = false;
       right.flatten(depth-1,array);
       if(this.needsParen){
@@ -522,6 +562,9 @@ function Term(leftterm, rightterm, operation){
   
   //finds a term in this term.  Returns true if its found, false otherwise.  Path is assumed to begin pointing to this node, and is lengthened to point to the correct term if its found. -1 in path indicates a leftward move, 1 indicates a rightward move
   this.find = function(term,path){
+    if(path == undefined){
+      path = [];
+    }
     //this.print();
     //left.print();
     if(this.equals(term)){
@@ -570,11 +613,30 @@ function Term(leftterm, rightterm, operation){
     return true;
   }
 
-  this.toString = function(){ 
-    if(!this.needsParen){
-      return left.toString() + Operation.toString(operation)+right.toString();
+  this.needsOp = function(){
+    if(operation == Operation.MULTIPLY){
+      if(!right.isConstant()){
+        return false;
+      }
     }
-    return "(" + left.toString()+Operation.toString(operation)+right.toString()+")";
+    return true;
+  }
+
+  this.toString = function(){ 
+    
+    var answer = "";
+    if(this.needsParen){
+      answer = "(";  
+    }
+    answer=answer+left.toString();
+    if(this.needsOp()){
+      answer= answer+Operation.toString(operation);
+    }
+    answer= answer+right.toString();
+    if(this.needsParen){
+      answer= answer+ ")";
+    }
+    return answer;
   }
 
   this.toDisplayString = function(){
@@ -582,7 +644,15 @@ function Term(leftterm, rightterm, operation){
       return this.toString();
     }
     else{
-      return Operation.toString(operation);
+      if(operation == Operation.MULTIPLY){
+        if(right.isConstant()){
+          return Operation.toString(operation);
+        }
+        return "";
+      }
+      else{
+        return Operation.toString(operation);
+      }
     }
   }
 
@@ -602,6 +672,9 @@ function SpecialCharacter(character){
     return this.displayString.length;
   }
   this.getDisplayLength = function(){
+    if(character == '(' || character == ')'){
+      return 0.5;
+    }
     return 1;
   }
 
@@ -623,8 +696,15 @@ function SpecialCharacter(character){
 function Equation(leftterm, rightterm){
   var left = leftterm;
   var right = rightterm;
+  right.parent = this;
+  left.parent = this;
   this.depth;
   this.draggable;
+
+  this.replace = function(termA,termB){
+    left.replace(termA,termB);
+    right.replace(termA,termB);
+  }
 
   this.flatten = function(depth,array){
     array = [];
