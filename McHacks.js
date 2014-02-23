@@ -30,7 +30,7 @@ if (Meteor.isClient) {
   }
 
   function get_xy(col,row) {
-    return $(".gridster ul [data-col='"+col+"'][data-row='"+row+"']");
+    return $(".gridster ul [data-col='"+col+"'][data-row='"+row+"']").get(0);
   }
 
   function get_id(id) {
@@ -44,13 +44,14 @@ if (Meteor.isClient) {
   Template.inputs.rendered = function() {
     if(!gridster){
       gridster = $(".gridster ul").gridster({
+          widget_selector: $('.draggable'),
           widget_margins: [7, 30],
           widget_base_dimensions: [45, 45],
           draggable: {
             stop: save_pos
           },
-          extra_rows: 0,
-          extra_cols: 0,
+          extra_rows: 16,
+          extra_cols: 16,
           avoid_overlapped_widgets: true,
           serialize_params: function($w, wgd){ 
               return { 
@@ -66,28 +67,33 @@ if (Meteor.isClient) {
     }
   }
 
-  Deps.autorun(function () {
-    var pos = Positions.findOne({session: Session.get("session"), n: Session.get("n")});
-    if(gridster && !pos){
-      add_widget_from_input(Strings.find({session: Session.get('session'), n: Session.get('n')}));
-    }
-    if(gridster && Session.get('session') && pos.updater != Session.get('uid')){
-      pos.diff.forEach(function(e){
-        curr = get_xy(e.col,e.row);
-        if(e.id != curr.attr('id')){
-          prev = get_id(e.id);
-          if(prev.length){
-            gridster.remove_widget(prev, function() {
-              gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
-            });
-          }
-          else{
-            gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
-          }
-        }
-      });
-    }
-  });
+  // Deps.autorun(function () {
+  //   console.log('positions handler run');
+  //   var pos = Positions.findOne({session: Session.get("session"), n: Session.get("n")});
+  //   if(gridster && !pos && Session.get('n')){
+  //     str = Strings.find({session: Session.get('session'), n: Session.get('n')});
+  //     if(str){
+  //       add_widget_from_input(str.i);
+  //     }
+  //     return;
+  //   }
+  //   if(gridster && Session.get('session') /*&& pos.updater != Session.get('uid')*/){
+  //     pos.diff.forEach(function(e){
+  //       curr = get_xy(e.col,e.row);
+  //       if(e.id != curr.id){
+  //         prev = get_id(e.id);
+  //         if(prev.length){
+  //           gridster.remove_widget(prev, function() {
+  //             gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
+  //           });
+  //         }
+  //         else{
+  //           gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
+  //         }
+  //       }
+  //     });
+  //   }
+  // });
 
   function save_pos() {
     current_pos =  gridster.serialize();
@@ -112,62 +118,77 @@ if (Meteor.isClient) {
     'keyup #n' : function (e) {
       e.preventDefault();
       val = $('#n').val();
-      Session.set('n',val);
+      Session.set('n',parseInt(val));
     }
   });
 
   function add_widget_from_input(str,add) {
     s = new StringParser();
-    t = s.parseEquation(str).flatten(Session.get('n'));
+    var t = s.parseEquation(str).flatten(Session.get('n'));
+    console.log(t);
     var id_c = Counts.findOne({session: Session.get("session"), n: Session.get('n')});
     if(!id_c){
       id_c = Counts.insert({session: Session.get("session"), count: 0, n: Session.get('n')});
       id_c = Counts.findOne({session: Session.get("session"), n: Session.get('n')});
     }
     Counts.update({_id: id_c._id}, {$inc: {count: 1}});
-    count = id_c.count + 1;
+    var count = id_c.count + 1;
     if(add){
       function run_each() {
+        console.log('run_each'+ count);
         t.forEach(function(e,i){
-          if(!Inputs.findOne({i: e.toDisplayString(), session: Session.get("session"), id: i+"_"+Session.get('n'), l: e.getLength(), n: Session.get("n")})){
-            Inputs.insert({i: e.toDisplayString(), session: Session.get("session"), id: i+"_"+Session.get('n'), l: e.getLength(), n: Session.get("n")});
-          }
-          if(add){
-            gridster.add_widget('<li class="item number" id="'+i+"_"+Session.get('n')+'">'+e.toDisplayString().replace("*","&middot;")+'</li>',e.getDisplayLength(),1,i+1,count);
+          if(!Inputs.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), row: count, col: i+1, l: e.getDisplayLength(), n: Session.get("n"), id: {$regex: i+"_"+Session.get('n')+"_"+count}})){
+            if(e.draggable){
+              draggable = 'draggable';
+            }else{
+              draggable = '';
+            }
+            Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: i+1, session: Session.get("session"), id: rid()+"_"+i+"_"+Session.get('n')+"_"+count, l: e.getDisplayLength(), n: Session.get("n")});
           }
         });
+        Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch().forEach(function(e) {
+          console.log(e);
+          gridster.add_widget('<li class="item '+e.type+' '+e.draggable+'" id="'+e.id+'">'+e.i+'</li>',e.l,1,e.col,e.row);
+        });
       }
-      c = 0;
+      if(gridster.$widgets.length == 0){
+        console.log('run_each_call from 0');
+        run_each();
+        return;
+      } 
+      var c = 0;
+      var len = gridster.$widgets.length;
       gridster.remove_all_widgets(function() {
         c += 1;
-        if(c == gridster.$widgets.length){
+        console.log(c);
+        if(c == len){ 
+          console.log('run_each_call');
           run_each();
         } 
       });
-      if(c == 0){
-        run_each();
-      }
     }
   }
 
-  Deps.autorun(function() {
-    n = Session.get('n');
-    if(!Inputs.findOne({session: Session.get('session'), n: Session.get('n')})){
-      Strings.find({session: Session.get('Session')}).fetch().forEach(function(e) {
-        add_widget_from_input(e.i, false);
-      });
-    }
-  });
+  // Deps.autorun(function() {
+  //   console.log('run n handler');
+  //   n = Session.get('n');
+  //   if(!Inputs.findOne({session: Session.get('session'), n: Session.get('n')})){
+  //     Strings.find({session: Session.get('Session')}).fetch().forEach(function(e) {
+  //       add_widget_from_input(e.i, false);
+  //     });
+  //   }
+
+  // });
 
 }
 
 
 if (Meteor.isServer) {
   Meteor.startup(function () {
-    // Inputs.remove({});
-    // Sessions.remove({});
-    // Positions.remove({});
-    // Counts.remove({});
+    Inputs.remove({});
+    Sessions.remove({});
+    Positions.remove({});
+    Counts.remove({});
   });
 }
 
@@ -315,8 +336,16 @@ function Variable(theletter){
     }
     return true;
   }
-  this.flatten=function(array){
+  this.flatten=function(depth, array){
+    if(array == undefined){
+      array = [];
+    }
     array.push(this);
+    return array;
+  }
+
+  this.getType = function(){
+    return "variable";
   }
 }
 Variable.prototype = new Term();
@@ -344,8 +373,12 @@ function Constant(thevalue){
     return value;
   }
 
-  this.flatten=function(array){
+  this.flatten=function(depth,array){
+    if(array == undefined){
+      array = [];
+    }
     array.push(this);
+    return array;
   }
 
   this.equals = function(term){
@@ -363,6 +396,10 @@ function Constant(thevalue){
       return false;
     }
     return true;
+  }
+
+  this.getType = function(){
+    return "constant";
   }
 }
 Constant.prototype = new Term();
@@ -385,6 +422,11 @@ function Term(leftterm, rightterm, operation){
   var right = rightterm;
   var operation = operation;
   this.depth;
+  this.draggable = true;
+
+  this.getType = function(){
+    return "mixed";
+  }
 
   this.decideChildrenParen = function(){
     if(operation == Operation.MULTIPLY){
@@ -431,24 +473,26 @@ function Term(leftterm, rightterm, operation){
 
   this.length = this.getLength();
 
-  this.flatten = function(array,depth){
+  this.flatten = function(depth, array){
+      if(array == undefined){
+        array = [];
+      }
       this.depth = depth;
       if(depth == undefined){
         depth = 1000;
       }
       if(depth == 1){
         array.push(this);
+        this.drraggable = true;
         return array;
-      }
-      if(array == undefined){
-        array = [];
       }
       if(this.needsParen){
         array.push(new SpecialCharacter("(")) 
       }   
-      left.flatten(array,depth-1);
+      left.flatten(depth-1,array);
       array.push(this);
-      right.flatten(array,depth-1);
+      this.draggable = false;
+      right.flatten(depth-1,array);
       if(this.needsParen){
         array.push(new SpecialCharacter(")")) 
       }
@@ -549,6 +593,8 @@ function Term(leftterm, rightterm, operation){
 
 function SpecialCharacter(character){
   this.displayString =  character
+  this.draggable = false;
+
   this.toDisplayString = function(){
     return this.displayString;
   }
@@ -558,14 +604,29 @@ function SpecialCharacter(character){
   this.getDisplayLength = function(){
     return 1;
   }
+
+  this.getType = function(){
+    if(character == '('){
+      return "leftParen";
+    }
+    if(character == ')'){
+      return "rightParen";
+    }
+    if(character == '='){
+      return "equals";
+    }
+  }
+
+  
 }
 
 function Equation(leftterm, rightterm){
   var left = leftterm;
   var right = rightterm;
   this.depth;
+  this.draggable;
 
-  this.flatten = function(array,depth){
+  this.flatten = function(depth,array){
     array = [];
     if(depth == undefined){
       depth = 1000;
@@ -573,12 +634,13 @@ function Equation(leftterm, rightterm){
     this.depth = depth;
     if(depth == 1){
       array.push(this);
+      this.draggable = true;
       return array;
     }
     
-    left.flatten(array,depth-1);
+    left.flatten(depth-1,array);
     array.push(new SpecialCharacter("="));
-    right.flatten(array,depth-1);
+    right.flatten(depth-1,array);
     return array;
   }
 
