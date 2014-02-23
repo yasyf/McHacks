@@ -5,6 +5,7 @@ Counts = new Meteor.Collection("counts");
 Strings = new Meteor.Collection("strings");
 if (Meteor.isClient) {
   var gridster;
+  var doneFirstDownload;
 
   function store_hash() {
     if(location.hash.length < 2){
@@ -19,6 +20,7 @@ if (Meteor.isClient) {
     if(!Session.get('uid')){
       Session.set('uid',Math.random().toString(36).substring(2,10));
     }
+    doneFirstDownload = false;
   });
 
   $(window).on('hashchange', function(){
@@ -30,11 +32,11 @@ if (Meteor.isClient) {
   }
 
   function get_xy(col,row) {
-    return $(".gridster ul [data-col='"+col+"'][data-row='"+row+"']").get(0);
+    return $(".gridster ul [data-col='"+col+"'][data-row='"+row+"']").eq(0);
   }
 
   function get_id(id) {
-    return $(".gridster #"+id);
+    return $(".gridster #"+id).eq(0);
   }
 
   Template.top.n = function() {
@@ -60,6 +62,7 @@ if (Meteor.isClient) {
           serialize_params: function($w, wgd){ 
               return { 
                      id: $($w).attr('id'), 
+                     class: $($w).attr('class'), 
                      col: wgd.col, 
                      row: wgd.row, 
                      size_x: wgd.size_x, 
@@ -74,8 +77,10 @@ if (Meteor.isClient) {
 
   function save_pos() {
     current_pos =  gridster.serialize();
+    console.log(current_pos);
     id = Positions.findOne({session: Session.get("session")});
     if(id){
+      console.log('submitted');
       Positions.update({_id: id._id},{$set: {diff: current_pos, updater: Session.get('uid'), n: Session.get('n')}});
     }
     else{
@@ -84,7 +89,9 @@ if (Meteor.isClient) {
   }
 
   Deps.autorun(function() {
-    Inputs.find({session: Session.get('session'), n: Session.get('n')}).count();
+    console.log("AUTORUN");
+    Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch();
+    Positions.find({session: Session.get('session'), n: Session.get('n')}).fetch();
     refresh_page();
   });
 
@@ -94,6 +101,7 @@ if (Meteor.isClient) {
       val = $('#i').val();
       Strings.insert({i: val, session: Session.get('session')});
       add_widget_from_input(val,true);
+      refresh_page();
       save_pos();
       $('#i').val('');
     },
@@ -105,11 +113,27 @@ if (Meteor.isClient) {
   });
 
   function refresh_page() {
+    added = Array();
     function run() {
-       Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch().forEach(function(e) {
-          gridster.add_widget('<li class="item '+e.type+' '+e.draggable+'" id="'+e.id+'">'+e.i+'</li>',e.l,1,e.col,e.row);
+      p = Positions.findOne({session: Session.get('session'), n: Session.get('n')});
+      if(p){
+         p.diff.forEach(function(e){
+          if(!_.contains(added,e.id)){
+            gridster.add_widget('<li class="'+e.class+'" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
+            added.push(e.id);
+            console.log('P added '+e.id);
+          }
         });
-    }
+      }
+      Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch().forEach(function(e) {
+        if(!_.contains(added,e.id)){
+          gridster.add_widget('<li class="item '+e.type+' '+e.draggable+'" id="'+e.id+'">'+e.i+'</li>',e.l,1,e.col,e.row);
+          added.push(e.id);
+          console.log('I added '+e.id);
+        }
+      });
+    }        
+       
     if(gridster){
       if(gridster.$widgets.length == 0){
           run();
@@ -680,6 +704,10 @@ function Equation(leftterm, rightterm){
   this.depth;
   this.draggable;
 
+  this.getType =function(){
+    return "equation";
+  }
+  
   this.replace = function(termA,termB){
     left.replace(termA,termB);
     right.replace(termA,termB);

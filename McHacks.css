@@ -17,7 +17,7 @@ body{
 
 .gridster{
 	width: 960px;
-	height: 500px;
+	height: 960px;
 	margin: 0 auto;
 	border: 1px dashed black;
 }
