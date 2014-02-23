@@ -16,6 +16,7 @@ if (Meteor.isClient) {
 
   Meteor.startup(function () {
     Session.setDefault('n', 1);
+    Session.setDefault('old_n', 1);
     store_hash();
     if(!Session.get('uid')){
       Session.set('uid',Math.random().toString(36).substring(2,10));
@@ -87,7 +88,19 @@ if (Meteor.isClient) {
       Positions.insert({diff: current_pos, session: Session.get("session"), updater: Session.get('uid'), n: Session.get('n')});
     }
   }
+  Deps.autorun(function() {
+    console.log("Switch n");
+    n = Session.get("n");
+    if(Session.equals("old_n",n)){
+      return
+    }
+    counter = 1;
+    Strings.find({session: Session.get('session')}).forEach(function(e){
+      add_widget_from_input(e.i,false,counter);
+      counter += 1;
+    });
 
+  });
   Deps.autorun(function() {
     console.log("AUTORUN");
     Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch();
@@ -149,37 +162,44 @@ if (Meteor.isClient) {
         });
       }
     }
-  }
-
-  function add_widget_from_input(str,add) {
+  
+  function add_widget_from_input(str,n,counter) {
     s = new StringParser();
     var t = s.parseEquation(str).flatten(Session.get('n'));
-    var id_c = Counts.findOne({session: Session.get("session"), n: Session.get('n')});
+    var id_c = Counts.findOne({session: Session.get("session")});
     if(!id_c){
-      id_c = Counts.insert({session: Session.get("session"), count: 0, n: Session.get('n')});
-      id_c = Counts.findOne({session: Session.get("session"), n: Session.get('n')});
+      id_c = Counts.insert({session: Session.get("session"), count: 0});
+      id_c = Counts.findOne({session: Session.get("session")});
     }
-    Counts.update({_id: id_c._id}, {$inc: {count: 1}});
+    if(n){
+      Counts.update({_id: id_c._id}, {$inc: {count: 1}});
+    }
+    else{
+      var old_count = id_c.count + 1;
+    }
     var count = id_c.count + 1;
-    if(add){
-      var lastL = 0;
-      t.forEach(function(e,i){
-        col_n = i+lastL;
-        if(col_n === 0){
-          col_n = 1;
+    var lastL = 0;
+    t.forEach(function(e,i){
+      if(counter){
+        count = counter;
+        console.log(counter);
+      }
+      col_n = i+lastL;
+      if(col_n === 0){
+        col_n = 1;
+      }
+      if(!Counts.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), l: e.getDisplayLength(), n: Session.get("n"), row: count, col: col_n, id: {$regex: i+"_"+Session.get('n')+"_"+count+"_"}})){
+        if(e.draggable){
+          draggable = 'draggable';
+        }else{
+          draggable = '';
         }
-        if(!Inputs.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), row: count, col: col_n, l: e.getDisplayLength(), n: Session.get("n"), id: {$regex: i+"_"+Session.get('n')+"_"+count}})){
-          if(e.draggable){
-            draggable = 'draggable';
-          }else{
-            draggable = '';
-          }
-          Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: col_n, session: Session.get("session"), id: rid()+"_"+i+"_"+Session.get('n')+"_"+count, l: e.getDisplayLength(), n: Session.get("n")});
-          lastL = e.getDisplayLength() + col_n - i - 1;
-        }
-      });
-    }
+        Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: col_n, session: Session.get("session"), id: i+"_"+Session.get('n')+"_"+count+"_"+rid(), l: e.getDisplayLength(), n: Session.get("n")});
+        lastL = e.getDisplayLength() + col_n - i - 1;
+      }
+    });
   }
+}
 
 
 if (Meteor.isServer) {
