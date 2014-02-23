@@ -71,33 +71,6 @@ if (Meteor.isClient) {
     }
   }
 
-  // Deps.autorun(function () {
-  //   console.log('positions handler run');
-  //   var pos = Positions.findOne({session: Session.get("session"), n: Session.get("n")});
-  //   if(gridster && !pos && Session.get('n')){
-  //     str = Strings.find({session: Session.get('session'), n: Session.get('n')});
-  //     if(str){
-  //       add_widget_from_input(str.i);
-  //     }
-  //     return;
-  //   }
-  //   if(gridster && Session.get('session') /*&& pos.updater != Session.get('uid')*/){
-  //     pos.diff.forEach(function(e){
-  //       curr = get_xy(e.col,e.row);
-  //       if(e.id != curr.id){
-  //         prev = get_id(e.id);
-  //         if(prev.length){
-  //           gridster.remove_widget(prev, function() {
-  //             gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
-  //           });
-  //         }
-  //         else{
-  //           gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
-  //         }
-  //       }
-  //     });
-  //   }
-  // });
 
   function save_pos() {
     current_pos =  gridster.serialize();
@@ -109,6 +82,11 @@ if (Meteor.isClient) {
       Positions.insert({diff: current_pos, session: Session.get("session"), updater: Session.get('uid'), n: Session.get('n')});
     }
   }
+
+  Deps.autorun(function() {
+    Inputs.find({session: Session.get('session'), n: Session.get('n')}).count();
+    refresh_page();
+  });
 
   Template.top.events({
     'submit #addfrm' : function (e) {
@@ -126,6 +104,29 @@ if (Meteor.isClient) {
     }
   });
 
+  function refresh_page() {
+    function run() {
+       Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch().forEach(function(e) {
+          gridster.add_widget('<li class="item '+e.type+' '+e.draggable+'" id="'+e.id+'">'+e.i+'</li>',e.l,1,e.col,e.row);
+        });
+    }
+    if(gridster){
+      if(gridster.$widgets.length == 0){
+          run();
+          return;
+        } 
+        var c = 0;
+        var len = gridster.$widgets.length;
+        gridster.remove_all_widgets(function() {
+          c += 1;
+          if(c == len){ 
+            run();
+          } 
+        });
+      }
+    }
+  }
+
   function add_widget_from_input(str,add) {
     s = new StringParser();
     var t = s.parseEquation(str).flatten(Session.get('n'));
@@ -137,56 +138,24 @@ if (Meteor.isClient) {
     Counts.update({_id: id_c._id}, {$inc: {count: 1}});
     var count = id_c.count + 1;
     if(add){
-      function run_each() {
-        var lastL = 0;
-        t.forEach(function(e,i){
-          col_n = i+lastL;
-          if(col_n === 0){
-            col_n = 1;
+      var lastL = 0;
+      t.forEach(function(e,i){
+        col_n = i+lastL;
+        if(col_n === 0){
+          col_n = 1;
+        }
+        if(!Inputs.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), row: count, col: col_n, l: e.getDisplayLength(), n: Session.get("n"), id: {$regex: i+"_"+Session.get('n')+"_"+count}})){
+          if(e.draggable){
+            draggable = 'draggable';
+          }else{
+            draggable = '';
           }
-          if(!Inputs.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), row: count, col: col_n, l: e.getDisplayLength(), n: Session.get("n"), id: {$regex: i+"_"+Session.get('n')+"_"+count}})){
-            if(e.draggable){
-              draggable = 'draggable';
-            }else{
-              draggable = '';
-            }
-            Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: col_n, session: Session.get("session"), id: rid()+"_"+i+"_"+Session.get('n')+"_"+count, l: e.getDisplayLength(), n: Session.get("n")});
-            lastL = e.getDisplayLength() + col_n - i - 1;
-          }
-        });
-        Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch().forEach(function(e) {
-          console.log(e);
-          gridster.add_widget('<li class="item '+e.type+' '+e.draggable+'" id="'+e.id+'">'+e.i+'</li>',e.l,1,e.col,e.row);
-        });
-      }
-      if(gridster.$widgets.length == 0){
-        run_each();
-        return;
-      } 
-      var c = 0;
-      var len = gridster.$widgets.length;
-      gridster.remove_all_widgets(function() {
-        c += 1;
-        console.log(c);
-        if(c == len){ 
-          run_each();
-        } 
+          Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: col_n, session: Session.get("session"), id: rid()+"_"+i+"_"+Session.get('n')+"_"+count, l: e.getDisplayLength(), n: Session.get("n")});
+          lastL = e.getDisplayLength() + col_n - i - 1;
+        }
       });
     }
   }
-
-  // Deps.autorun(function() {
-  //   console.log('run n handler');
-  //   n = Session.get('n');
-  //   if(!Inputs.findOne({session: Session.get('session'), n: Session.get('n')})){
-  //     Strings.find({session: Session.get('Session')}).fetch().forEach(function(e) {
-  //       add_widget_from_input(e.i, false);
-  //     });
-  //   }
-
-  // });
-
-}
 
 
 if (Meteor.isServer) {
@@ -195,6 +164,7 @@ if (Meteor.isServer) {
     Sessions.remove({});
     Positions.remove({});
     Counts.remove({});
+    Strings.remove({});
   });
 }
 
