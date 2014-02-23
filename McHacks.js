@@ -1,6 +1,8 @@
 Sessions = new Meteor.Collection("sessions");
 Inputs = new Meteor.Collection("inputs");
 Positions = new Meteor.Collection("positions");
+Counts = new Meteor.Collection("counts");
+Strings = new Meteor.Collection("strings");
 if (Meteor.isClient) {
   var gridster;
 
@@ -12,6 +14,7 @@ if (Meteor.isClient) {
   }
 
   Meteor.startup(function () {
+    Session.setDefault('n', 1);
     store_hash();
     if(!Session.get('uid')){
       Session.set('uid',Math.random().toString(36).substring(2,10));
@@ -34,17 +37,19 @@ if (Meteor.isClient) {
     return $(".gridster #"+id);
   }
 
+  Template.top.n = function() {
+    return Session.get('n');
+  }
+
   Template.inputs.rendered = function() {
     if(!gridster){
       gridster = $(".gridster ul").gridster({
-          widget_margins: [10, 30],
-          widget_base_dimensions: [40, 40],
+          widget_margins: [7, 30],
+          widget_base_dimensions: [45, 45],
           draggable: {
             stop: save_pos
           },
           avoid_overlapped_widgets: true,
-          min_cols: 16,
-          min_rows: 16,
           serialize_params: function($w, wgd){ 
               return { 
                      id: $($w).attr('id'), 
@@ -60,9 +65,9 @@ if (Meteor.isClient) {
   }
 
   Deps.autorun(function () {
-    var pos = Positions.findOne({session: Session.get("session")});
+    var pos = Positions.findOne({session: Session.get("session"), n: Session.get("n")});
     if(gridster && !pos){
-      location.reload(true);
+      add_widget_from_input(Strings.find({session: Session.get('session'), n: Session.get('n')}));
     }
     if(gridster && Session.get('session') && pos.updater != Session.get('uid')){
       pos.diff.forEach(function(e){
@@ -71,11 +76,11 @@ if (Meteor.isClient) {
           prev = get_id(e.id);
           if(prev.length){
             gridster.remove_widget(prev, function() {
-              gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
+              gridster.add_widget('<li class="item number" id="'+i+"_"+Session.get('n')+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
             });
           }
           else{
-            gridster.add_widget('<li class="item number" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
+            gridster.add_widget('<li class="item number" id="'+i+"_"+Session.get('n')+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
           }
         }
       });
@@ -86,10 +91,10 @@ if (Meteor.isClient) {
     current_pos =  gridster.serialize();
     id = Positions.findOne({session: Session.get("session")});
     if(id){
-      Positions.update({_id: id._id},{$set: {diff: current_pos, updater: Session.get('uid')}});
+      Positions.update({_id: id._id},{$set: {diff: current_pos, updater: Session.get('uid'), n: Session.get('n')}});
     }
     else{
-      Positions.insert({diff: current_pos, session: Session.get("session"), updater: Session.get('uid')});
+      Positions.insert({diff: current_pos, session: Session.get("session"), updater: Session.get('uid'), n: Session.get('n')});
     }
   }
 
@@ -97,27 +102,57 @@ if (Meteor.isClient) {
     'submit #addfrm' : function (e) {
       e.preventDefault();
       val = $('#i').val();
-      add_widget_from_input(val);
+      Strings.insert({i: val, session: Session.get('session')});
+      add_widget_from_input(val,true);
       save_pos();
       $('#i').val('');
+    },
+    'keyup #n' : function (e) {
+      e.preventDefault();
+      val = $('#n').val();
+      Session.set('n',val);
     }
   });
 
-  function add_widget_from_input(str) {
+  function add_widget_from_input(str,add) {
     s = new StringParser();
-    t = s.parseTerm(str).flatten();
+    t = s.parseTerm(str).flatten(Session.get('n'));
+    var id_c = Counts.findOne({session: Session.get("session"), n: Session.get('n')});
+    if(!id_c){
+      id_c = Counts.insert({session: Session.get("session"), count: 0, n: Session.get('n')});
+      id_c = Counts.findOne({session: Session.get("session"), n: Session.get('n')});
+    }
+    Counts.update({_id: id_c._id}, {$inc: {count: 1}});
+    count = id_c.count + 1;
     t.forEach(function(e,i){
-      Inputs.insert({i: e.toDisplayString(), session: Session.get("session"), id: i, l: e.getLength()});
-      gridster.add_widget('<li class="item number" id="'+i+'">'+e.toDisplayString()+'</li>',1,e.getLength());
+      if(Inputs.findOne({i: e.toDisplayString(), session: Session.get("session"), id: i, l: e.getLength(), n: Session.get("n")})){
+        Inputs.insert({i: e.toDisplayString(), session: Session.get("session"), id: i, l: e.getLength(), n: Session.get("n")});
+      }
+      if(add){
+        gridster.remove_all_widgets();
+        gridster.add_widget('<li class="item number" id="'+i+"_"+Session.get('n')+'">'+e.toDisplayString().replace("*","&middot;")+'</li>',e.getDisplayLength(),1,i+1,count);
+      }
     });
   }
+
+  Deps.autorun(function() {
+    n = Session.get('n');
+    if(!Inputs.findOne({session: Session.get('session'), n: Session.get('n')})){
+      Strings.findOne({session: Session.get('Session')}).fetch().forEach(function(e) {
+        add_widget_from_input(e.i, false);
+      });
+    }
+  });
+
 }
+
 
 if (Meteor.isServer) {
   Meteor.startup(function () {
     // Inputs.remove({});
     // Sessions.remove({});
     // Positions.remove({});
+    // Counts.remove({});
   });
 }
 
@@ -323,12 +358,49 @@ function combine(eq1,eq2,operation){
 //any term in an equation: e.g. "x", "x+y", "(x+y)/(2*2)", etc.
 //Defined in terms of an operation on two other terms, which could be general terms or constants or variables
 function Term(leftterm, rightterm, operation){
-
-
+  this.needsParen = false;  
   var left = leftterm;
   var right = rightterm;
   var operation = operation;
-  
+
+  this.decideChildrenParen = function(){
+    if(operation == Operation.MULTIPLY){
+      if(left.getOperation() == Operation.ADD || left.getOperation == Operation.SUBTRACT){
+        left.needsParen = true;
+      }
+      if(right.getOperation() == Operation.ADD || right.getOperation == Operation.SUBTRACT){
+        right.needsParen = true;
+      }
+    }
+    if(operation == Operation.DIVIDE){
+      if(left.getOperation() == Operation.ADD || left.getOperation == Operation.SUBTRACT){
+        left.needsParen = true;
+      }
+      right.needsParen = true;
+    }
+    if(operation == Operation.ADD){
+      if(left.getOperation() == Operation.MULTIPLY || left.getOperation == Operation.DIVIDE){
+        left.needsParen = true;
+      }
+      if(right.getOperation() == Operation.MULTIPLY || right.getOperation == Operation.DIVIDE){
+        right.needsParen = true;
+      }
+    }
+    if(operation == Operation.SUBTRACT){
+      if(left.getOperation() == Operation.MULTIPLY || left.getOperation == Operation.DIVIDE){
+        left.needsParen = true;
+      }
+      if(operation == Operation.DIVIDE){
+        right.needsParen = true;
+      }
+    }
+  }
+
+  this.decideChildrenParen();
+
+  this.getDisplayLength = function(){
+    return 1;
+  }
 
   this.getLength = function(){
     return this.toString().length;
@@ -340,9 +412,15 @@ function Term(leftterm, rightterm, operation){
       if(array == undefined){
         array = [];
       }
+      if(this.needsParen){
+        array.push(new SpecialCharacter("(")) 
+      }   
       left.flatten(array);
       array.push(this);
       right.flatten(array);
+      if(this.needsParen){
+        array.push(new SpecialCharacter(")")) 
+      }
       return array;
   }
 
@@ -418,6 +496,9 @@ function Term(leftterm, rightterm, operation){
   }
 
   this.toString = function(){ 
+    if(!this.needsParen){
+      return left.toString() + Operation.toString(operation)+right.toString();
+    }
     return "(" + left.toString()+Operation.toString(operation)+right.toString()+")";
   }
 
@@ -430,10 +511,30 @@ function Term(leftterm, rightterm, operation){
   }
 }
 
+function SpecialCharacter(character){
+  this.displayString =  character
+  this.toDisplayString = function(){
+    return this.displayString;
+  }
+  this.getLength = function(){
+    return this.displayString.length;
+  }
+  this.getDisplayLength = function(){
+    return 1;
+  }
+}
+
 function Equation(leftterm, rightterm){
   var left = leftterm;
   var right = rightterm;
   
+  this.flatten = function(array){
+    array = [];
+    left.flatten(array);
+    array.push(new SpecialCharacter("="));
+    right.flatten(array);
+    return array;
+  }
 
   this.isolate = function(term){
     var path = [];
@@ -484,6 +585,10 @@ function Equation(leftterm, rightterm){
 
   this.getRight = function(){
     return right;
+  }
+
+  this.getDisplayLength = function(){
+    return 1;
   }
 
   this.isolateControler= function(a,b) {

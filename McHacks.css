@@ -1,8 +1,8 @@
 .item{
 	font-size: 40px;
-	padding: 0px 10px;
-	width: auto !important;
-	height: auto !important;
+	padding: 0px 5px;
+	width: 45px;
+	height: 45px;
 }
 
 .gridster{
@@ -21,4 +21,8 @@ li{
 	list-style-type: none;
 	border: 1px solid black;
 	text-align: center;
+}
+
+.hidden{
+	display: none !important;
 }
