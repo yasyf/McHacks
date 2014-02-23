@@ -10,9 +10,9 @@ body{
 
 .item{
 	font-size: 40px;
-	min-width: 32px !important;
+	min-width: 45px !important;
 	width: auto !important;
-	height: 45 !important;
+	height: 45px !important;
 }
 
 .gridster{
@@ -29,7 +29,6 @@ body{
 
 li{
 	list-style-type: none;
-	border: 1px solid black;
 	text-align: center;
 }
  
@@ -50,3 +49,13 @@ li{
 
 }
 
+.popover{
+	background-color: gray;
+	width: 100px;
+	height: 100px;
+	position: absolute;
+	z-index: 10;
+	opacity:0.4;
+	position: relative;
+	bottom: 70px;
+}

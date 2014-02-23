@@ -6,6 +6,9 @@ Strings = new Meteor.Collection("strings");
 if (Meteor.isClient) {
   var gridster;
   var doneFirstDownload;
+  var isDragging;
+  var currentOther;
+  var currentMe;
 
   function store_hash() {
     if(location.hash.length < 2){
@@ -22,6 +25,7 @@ if (Meteor.isClient) {
       Session.set('uid',Math.random().toString(36).substring(2,10));
     }
     doneFirstDownload = false;
+    isDragging = false;
   });
 
   $(window).on('hashchange', function(){
@@ -44,6 +48,23 @@ if (Meteor.isClient) {
     return Session.get('n');
   }
 
+  function overlap_handler(cdata) {
+    if(cdata){
+        me = $(cdata.player_coords.el[0]);
+        currentMe = me.attr('id');
+        me.css("background-color","#c6ecba");
+        y = Math.floor((cdata.area_coords.y1/119)+(65/119));
+        x = Math.floor((cdata.area_coords.x1 - 190)/56);
+        el = get_xy(x,y);
+        if(el.attr('id') && el.attr('id') != me.attr('id') && el.attr('id') != currentOther){
+          currentOther = el.attr('id');
+          $('.popover').remove();
+          $(el).css("background-color","#b2bde7");
+          $('<div class="popover"></div>').appendTo($(el));
+        }
+      }
+    }
+
   Template.inputs.rendered = function() {
     if(!gridster){
       gridster = $(".gridster ul").gridster({
@@ -51,15 +72,17 @@ if (Meteor.isClient) {
           widget_base_dimensions: [45, 45],
           widget_margins: [5, 30],
           draggable: {
+            start: start_drag,
             stop: save_pos,
             items: '.draggable'
           },
           collision: {
-            colliders: $('.draggable')
+            colliders: $('.draggable'),
+            on_overlap: overlap_handler
           },
           extra_rows: 16,
           extra_cols: 16,
-          avoid_overlapped_widgets: true,
+          avoid_overlapped_widgets: false,
           serialize_params: function($w, wgd){ 
               return { 
                      id: $($w).attr('id'), 
@@ -68,20 +91,40 @@ if (Meteor.isClient) {
                      row: wgd.row, 
                      size_x: wgd.size_x, 
                      size_y: wgd.size_y, 
-                     content: $($w).html() 
+                     content: $($w).html(),
+                     str: $($w).attr('data-str'),
+                     ind: $($w).attr('data-ind')
                    };
           }
       }).data('gridster');
     }
+      $('body').on('keydown',function(e) { 
+        if(isDragging && e.which == 82){
+          old_term_text = $("#"+currentOther).attr('data-str');
+          new_term_text = $("#"+currentMe).attr('data-str');
+          s = new StringParser();
+          old_term = s.parseEquation(old_term_text).flatten(Session.get('n'))[parseInt($("#"+currentOther).attr('data-ind'))]
+          new_term = s.parseEquation(new_term_text).flatten(Session.get('n'))[parseInt($("#"+currentMe).attr('data-ind'))]
+          console.log(old_term.toString());
+          console.log("REPLACE");
+          console.log(new_term.toString());
+          old_term.replace(old_term, new_term);
+          console.log(new_term.parent);
+          console.log(new_term.parent.toString());
+          add_widget_from_input(new_term.getEquation().toString(),true);
+        }
+      })
   }
 
-
+  function start_drag() {
+    isDragging = true;
+  }
   function save_pos() {
+    isDragging = false;
+    $('.popover').remove();
     current_pos =  gridster.serialize();
-    console.log(current_pos);
     id = Positions.findOne({session: Session.get("session")});
     if(id){
-      console.log('submitted');
       Positions.update({_id: id._id},{$set: {diff: current_pos, updater: Session.get('uid'), n: Session.get('n')}});
     }
     else{
@@ -89,7 +132,9 @@ if (Meteor.isClient) {
     }
   }
   Deps.autorun(function() {
-    console.log("Switch n");
+    if(isDragging){
+      return;
+    }
     n = Session.get("n");
     if(Session.equals("old_n",n)){
       return
@@ -102,7 +147,9 @@ if (Meteor.isClient) {
 
   });
   Deps.autorun(function() {
-    console.log("AUTORUN");
+    if(isDragging){
+      return;
+    }
     Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch();
     Positions.find({session: Session.get('session'), n: Session.get('n')}).fetch();
     refresh_page();
@@ -112,7 +159,7 @@ if (Meteor.isClient) {
     'submit #addfrm' : function (e) {
       e.preventDefault();
       val = $('#i').val();
-      Strings.insert({i: val, session: Session.get('session')});
+      s_id = Strings.insert({i: val, session: Session.get('session')});
       add_widget_from_input(val,true);
       refresh_page();
       save_pos();
@@ -132,17 +179,15 @@ if (Meteor.isClient) {
       if(p){
          p.diff.forEach(function(e){
           if(!_.contains(added,e.id)){
-            gridster.add_widget('<li class="'+e.class+'" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
+            gridster.add_widget('<li data-ind="'+e.ind+'" data-str="'+e.str+'" class="'+e.class+'" id="'+e.id+'">'+e.content+'</li>',e.size_x,e.size_y,e.col,e.row);
             added.push(e.id);
-            console.log('P added '+e.id);
           }
         });
       }
       Inputs.find({session: Session.get('session'), n: Session.get('n')}).fetch().forEach(function(e) {
         if(!_.contains(added,e.id)){
-          gridster.add_widget('<li class="item '+e.type+' '+e.draggable+'" id="'+e.id+'">'+e.i+'</li>',e.l,1,e.col,e.row);
+          gridster.add_widget('<li data-ind="'+e.ind+'" data-str="'+e.str+'" class="item '+e.type+' '+e.draggable+'" id="'+e.id+'">'+e.i+'</li>',e.l,1,e.col,e.row);
           added.push(e.id);
-          console.log('I added '+e.id);
         }
       });
     }        
@@ -182,19 +227,18 @@ if (Meteor.isClient) {
     t.forEach(function(e,i){
       if(counter){
         count = counter;
-        console.log(counter);
       }
       col_n = i+lastL;
       if(col_n === 0){
         col_n = 1;
       }
-      if(!Counts.findOne({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), l: e.getDisplayLength(), n: Session.get("n"), row: count, col: col_n})){
+      if(!Counts.findOne({s: str, ind: i, i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), session: Session.get("session"), l: Math.ceil(e.getDisplayLength()), n: Session.get("n"), row: count, col: col_n})){
         if(e.draggable){
           draggable = 'draggable';
         }else{
           draggable = '';
         }
-        Inputs.insert({i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: col_n, session: Session.get("session"), id: i+"_"+Session.get('n')+"_"+count+"_"+rid(), l: e.getDisplayLength(), n: Session.get("n")});
+        Inputs.insert({str: str, ind: i, i: e.toDisplayString().replace("*","&middot;"), type: e.getType(), draggable: draggable, row: count, col: col_n, session: Session.get("session"), id: i+"_"+Session.get('n')+"_"+count+"_", l: Math.ceil(e.getDisplayLength()), n: Session.get("n")});
         lastL = e.getDisplayLength() + col_n - i - 1;
       }
     });
@@ -272,6 +316,7 @@ var Operation = {
 
 function StringParser(){
   this.parseEquation = function(string){
+      string = string.replace(' ','');
       if(string.match("=")){
         var index = string.indexOf('=');
         var leftTerm = parseTerm(string,0,index);
@@ -451,6 +496,11 @@ function Term(leftterm, rightterm, operation){
   this.depth;
   this.draggable = true;
 
+  this.getEquation = function(){
+    console.log("Traversed up to " + this.toString());
+    return this.parent.getEquation();
+  }
+
   this.setRight = function(term){
      right = term;
      term.parent = this;
@@ -464,15 +514,21 @@ function Term(leftterm, rightterm, operation){
   //replaces termA with termB everywhere
   this.replace = function(termA, termB){
     var parent; //the parent
-    var direction=-1; //left = -1, right = 1;
-    var newParent;
     if(this.equals(termA)){
       parent = this.parent;
-      if(parent.getLeft().equals(termA)){
+      if(parent == undefined){
+        console.log("Damn.");
+      }
+      if(parent.getLeft() === this){
+        console.log(this.toString() + " is left child of " + parent.toString());
         parent.setLeft(termB);
       }
-      if(parent.getRight().equals(termA)){
+      else if(parent.getRight() === this){
+        console.log(this.toString() + " is right child of " + parent.toString());
         parent.setRight(termB);
+      }
+      else{
+        console.log("MEEGADAMNNN");
       }
     }
     else{
@@ -494,6 +550,9 @@ function Term(leftterm, rightterm, operation){
   }
 
   this.decideChildrenParen = function(){
+    if(left == undefined || right == undefined){
+      return;
+    }
     if(operation == Operation.MULTIPLY){
       if(left.getOperation() == Operation.ADD || left.getOperation == Operation.SUBTRACT){
         left.needsParen = true;
@@ -717,17 +776,25 @@ function SpecialCharacter(character){
 }
 
 function Equation(leftterm, rightterm){
+
+  console.log("Left term: " + leftterm.toString());
+  console.log(rightterm.toString());
   var left = leftterm;
-  var right = rightterm;
+  var right = rightterm;  
   right.parent = this;
   left.parent = this;
+  console.log("Not that one..");
   this.depth;
   this.draggable;
+
+  this.getEquation = function(){
+    return this;
+  }
 
   this.getType =function(){
     return "equation";
   }
-  
+
   this.replace = function(termA,termB){
     left.replace(termA,termB);
     right.replace(termA,termB);
